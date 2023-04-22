@@ -19,27 +19,28 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
-const (
-	varRunMountPath = "/var/run"
-)
-
 const defaultImagePullingTimeout = 10 * time.Minute
 const defaultImagePullingProgressLogInterval = 5 * time.Second
 
 var images = flag.String("images", "", "images to pull (comma separated)")
+var runtimePath = flag.String("runtime", "/var/run", "mount path for container runtime")
 
 func main() {
-	f, err := newDaemon()
-	if err != nil {
-		klog.Error(err)
-	}
+	klog.InitFlags(nil)
 	flag.Parse()
 	if images == nil || *images == "" {
 		klog.Error("No images specified")
 		return
 	}
-	imageList := strings.Split(*images, ",")
+	klog.Info("runtime path: ", *runtimePath)
 
+	f, err := newDaemon()
+	if err != nil {
+		klog.Error(err)
+		return
+	}
+
+	imageList := strings.Split(strings.Trim(*images, "\""), ",")
 	for _, image := range imageList {
 		if err := Pull(image, f); err != nil {
 			klog.Error(err)
@@ -62,7 +63,7 @@ func newDaemon() (daemonruntime.Factory, error) {
 	}
 
 	accountManager := daemonutil.NewImagePullAccountManager(genericClient.KubeClient)
-	runtimeFactory, err := daemonruntime.NewFactory(varRunMountPath, accountManager)
+	runtimeFactory, err := daemonruntime.NewFactory(*runtimePath, accountManager)
 	if err != nil {
 		return nil, fmt.Errorf("failed to new runtime factory: %v", err)
 	}
